@@ -4,6 +4,7 @@
 	{
 		
 	}
+
 	SubShader
 	{
 		Tags { "RenderType"="Opaque" }
@@ -15,6 +16,9 @@
 			#pragma vertex vert
 			#pragma fragment frag
 			#include "UnityCG.cginc"
+
+			float4 _MainLightPosWS;
+			uniform float MaxDepth = 200;
 
 			struct appdata
 			{
@@ -36,10 +40,12 @@
 				return o;
 			}
 			
-			fixed4 frag (v2f i) : SV_Target
+			float4 frag (v2f i) : SV_Target
 			{
-				//float value = i.vertex.z / i.vertex.w;
-				return fixed4(0, 0, 0, 1);
+				float depth = distance(_MainLightPosWS.xyz, i.vertex.xyz);
+				depth = depth / MaxDepth;
+				// return float4(0.1, 0, 0.2, 0.5);
+				return float4(depth, depth * depth, 0, 1);
 			}
 			ENDCG
 		}

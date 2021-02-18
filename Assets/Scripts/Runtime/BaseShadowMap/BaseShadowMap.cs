@@ -16,340 +16,307 @@ using System;
 using UnityEngine;
 using UnityEditor;
 
-[ExecuteAlways]
-[RequireComponent(typeof(Light))]
-public class BaseShadowMap : MonoBehaviour
+namespace Astroite.Shadow
 {
-    private int m_DepthTextureWidth = 1024;
-    private int m_DepthTextureHeight = 1024;
-    private RenderTexture m_DepthTexture = null;
-    private Camera m_DepthCamera = null;
-    private Matrix4x4 m_LightVPMatrix;              //View&Projection's matrix in light space.
-    private Light m_DirectionalLight = null;
-
-    public Shader m_CaptureDepthShader = null;
-    public float m_MaxSceneHeight = 10;             //场景中可能出现的物体的最高高度.
-    public float m_MinSceneHeight = 0;              //场景中可能出现的额物体的最低高度.
-
-    [HideInInspector]
-    public int m_CullingMask = -1;
-    [HideInInspector]
-    public int m_CullingMaskSelection = 0;
-
-    void Start()
+    [ExecuteAlways]
+    [RequireComponent(typeof(Light))]
+    public class BaseShadowMap : MonoBehaviour
     {
-        m_DirectionalLight = GetComponent<Light>();
-        m_DepthTexture = InitRenderTexture();
+        private int m_DepthTextureWidth = 1024;
+        private int m_DepthTextureHeight = 1024;
+        private RenderTexture m_DepthTexture = null;
+        private Camera m_DepthCamera = null;
+        //View&Projection's matrix in light space.
+        private Matrix4x4 m_LightVPMatrix;
+        private Light m_DirectionalLight = null;
 
-        //方向光的下一层挂载一个摄像机用于渲染获取目标物体的深度图.
-        m_DepthCamera = InitDepthCamera(gameObject, m_DepthTexture);
-    }
+        public Shader m_CaptureDepthShader = null;
+        public float m_MaxSceneHeight = 10;       
+        public float m_MinSceneHeight = 0;             
 
-    void Update()
-    {
-        Graphics.SetRenderTarget(m_DepthTexture);
-        GL.Clear(true, true, Color.white);
+        private Material m_BlurMaterial = null;
+        public Shader m_BlurShader = null;
+        [Range(0, 6)]
+        public int DownSampleNum = 2;
+        [Range(0.0f, 20.0f)]
+        public float BlurSpreadSize = 3.0f;
+        [Range(0, 8)]
+        public int BlurIterations = 3;
 
-        if (null == m_DepthCamera) return;
-        if (null == m_CaptureDepthShader) return;
+        [HideInInspector]
+        public int m_CullingMask = -1;
+        [HideInInspector]
+        public int m_CullingMaskSelection = 0;
 
-        // UpdateClipPlane(Camera.main, m_MinSceneHeight - 1, m_MaxSceneHeight + 1);
-        GetCameraViewCrossPoint(Camera.main);
-
-        DrawViewFrustum(Camera.main);
-        UpdateDepthCamera(Camera.main, m_DepthCamera, m_DirectionalLight);
-
-        Prepare4Shader();
-
-        m_DepthCamera.RenderWithShader(m_CaptureDepthShader, "RenderType");
-    }
-
-    RenderTexture InitRenderTexture()
-    {
-        RenderTexture rt = new RenderTexture(m_DepthTextureWidth, m_DepthTextureHeight, 0, RenderTextureFormat.RG32, RenderTextureReadWrite.Linear);
-        rt.antiAliasing = 8;
-        rt.Create();
-
-        return rt;
-    }
-
-    Camera InitDepthCamera(GameObject lightObj, RenderTexture rt)
-    {
-        Camera depthCamera = lightObj.GetComponentInChildren<Camera>();
-        if (!depthCamera)
+        void Start()
         {
-            GameObject depthCameraObj = new GameObject("DepthCamera");
-            depthCamera = depthCameraObj.AddComponent<Camera>();
-            depthCameraObj.transform.SetParent(lightObj.transform, false);
+            m_DirectionalLight = GetComponent<Light>();
+            m_DepthTexture = InitRenderTexture();
+
+            m_DepthCamera = InitDepthCamera(gameObject, m_DepthTexture);
+
+            m_BlurShader = Shader.Find("Learning Unity Shader/Lecture 15/RapidBlurEffect");
+            m_BlurMaterial = new Material(m_BlurShader);
         }
 
-        depthCamera.orthographic = true;
-        depthCamera.backgroundColor = Color.white;
-        depthCamera.clearFlags = CameraClearFlags.Color;
-        depthCamera.enabled = false;
-        depthCamera.targetTexture = rt;
-        depthCamera.nearClipPlane = 1.0f;
-        depthCamera.farClipPlane = 10.0f;
-        depthCamera.cullingMask = m_CullingMask;
-
-        return depthCamera;
-    }
-
-    /// <summary>
-    /// 初始化RenderTexture和方向光投影矩阵信息传递到Shader中.
-    /// </summary>
-    void Prepare4Shader()
-    {
-        Matrix4x4 world2View = m_DepthCamera.worldToCameraMatrix;
-        Matrix4x4 projection = GL.GetGPUProjectionMatrix(m_DepthCamera.projectionMatrix, false);
-        m_LightVPMatrix = projection * world2View;
-
-        Shader.SetGlobalTexture("_ShadowDepthTex", m_DepthTexture);
-        Shader.SetGlobalMatrix("_LightViewClipMatrix", m_LightVPMatrix);
-    }
-
-    /// <summary>
-    /// 计算摄像机视锥和上下界面的交点
-    /// </summary>
-    /// <param name="mainCamera"></param>
-    /// <returns></returns>
-    List<Vector4> GetCameraViewCrossPoint(Camera mainCamera)
-    {
-        Vector4 camWorldPos = mainCamera.transform.position;
-        float angle = (mainCamera.fieldOfView / 180) * Mathf.PI;
-        float nDis = mainCamera.nearClipPlane;
-        
-
-        // 近裁剪面
-        List<Vector4> nearClipPoints = new List<Vector4>
+        void Update()
         {
-            new Vector4(nDis * Mathf.Tan(angle / 2) * mainCamera.aspect, -nDis * Mathf.Tan(angle / 2), nDis, 1),
-            new Vector4(nDis * Mathf.Tan(angle / 2) * mainCamera.aspect, nDis * Mathf.Tan(angle / 2), nDis, 1),
-            new Vector4(-nDis * Mathf.Tan(angle / 2) * mainCamera.aspect, nDis * Mathf.Tan(angle / 2), nDis, 1),
-            new Vector4(-nDis * Mathf.Tan(angle / 2) * mainCamera.aspect, -nDis * Mathf.Tan(angle / 2), nDis, 1),
-            new Vector4(-nDis * Mathf.Tan(angle / 2) * mainCamera.aspect, -nDis * Mathf.Tan(angle / 2), nDis, 1)
-        };
+            Graphics.SetRenderTarget(m_DepthTexture);
+            GL.Clear(true, true, Color.white);
 
-        // 转换到世界空间
-        Matrix4x4 local2WorldMatrix = mainCamera.transform.localToWorldMatrix;
-        for (int i = 0; i < nearClipPoints.Count; i++)
-            nearClipPoints[i] = local2WorldMatrix * nearClipPoints[i];
+            if (null == m_DepthCamera) return;
+            if (null == m_CaptureDepthShader) return;
 
+            // UpdateClipPlane(Camera.main, m_MinSceneHeight - 1, m_MaxSceneHeight + 1);
+            GetCameraViewCrossPoint(Camera.main);
 
-        List<Vector4> viewFrustrumPoints = new List<Vector4>();
-        for (int i = 0; i < 4; i++)
-        {
-            float t = (m_MaxSceneHeight - nearClipPoints[i].y) / (nearClipPoints[i].y - camWorldPos.y);
-            float x = nearClipPoints[i].x + t * (nearClipPoints[i].x - camWorldPos.x);
-            float z = nearClipPoints[i].z + t * (nearClipPoints[i].z - camWorldPos.z);
+            DrawViewFrustum(Camera.main);
+            UpdateDepthCamera(Camera.main, m_DepthCamera, m_DirectionalLight);
 
-            viewFrustrumPoints.Add(new Vector4(x, m_MaxSceneHeight, z, 1));
-        }
-        for (int i = 0; i < 4; i++)
-        {
-            float t = (m_MinSceneHeight - nearClipPoints[i].y) / (nearClipPoints[i].y - camWorldPos.y);
-            float x = nearClipPoints[i].x + t * (nearClipPoints[i].x - camWorldPos.x);
-            float z = nearClipPoints[i].z + t * (nearClipPoints[i].z - camWorldPos.z);
+            SetShaderGlobal();
 
-            viewFrustrumPoints.Add(new Vector4(x, m_MinSceneHeight, z, 1));
+            m_DepthCamera.RenderWithShader(m_CaptureDepthShader, "RenderType");
+            // BlurDepthRT(m_DepthTexture);
         }
 
-
-        return viewFrustrumPoints;
-    }
-
-    /// <summary>
-    /// 精简当前主摄像机的Clip区域, 方便后续深度摄像机也用一个最小包围盒覆盖主摄像机区域.
-    /// </summary>
-    void UpdateClipPlane(Camera mainCamera, float minHeight, float maxHeight)
-    {
-        float angle = (mainCamera.fieldOfView / 180) * Mathf.PI;
-        float nDis = mainCamera.nearClipPlane;
-        float fDis = mainCamera.farClipPlane;
-        List<Vector4> nearClipPoints = new List<Vector4>();
-        List<Vector4> farClipPoints = new List<Vector4>();
-
-        //近平面的四个点
-        nearClipPoints.Add(new Vector4(nDis * Mathf.Tan(angle / 2) * mainCamera.aspect, -nDis * Mathf.Tan(angle / 2), nDis, 1));
-        nearClipPoints.Add(new Vector4(nDis * Mathf.Tan(angle / 2) * mainCamera.aspect, nDis * Mathf.Tan(angle / 2), nDis, 1));
-        nearClipPoints.Add(new Vector4(-nDis * Mathf.Tan(angle / 2) * mainCamera.aspect, nDis * Mathf.Tan(angle / 2), nDis, 1));
-        nearClipPoints.Add(new Vector4(-nDis * Mathf.Tan(angle / 2) * mainCamera.aspect, -nDis * Mathf.Tan(angle / 2), nDis, 1));
-
-        //远平面的四个角.
-        farClipPoints.Add(new Vector4(fDis * Mathf.Tan(angle / 2) * mainCamera.aspect, -fDis * Mathf.Tan(angle / 2), fDis, 1));
-        farClipPoints.Add(new Vector4(fDis * Mathf.Tan(angle / 2) * mainCamera.aspect, fDis * Mathf.Tan(angle / 2), fDis, 1));
-        farClipPoints.Add(new Vector4(-fDis * Mathf.Tan(angle / 2) * mainCamera.aspect, fDis * Mathf.Tan(angle / 2), fDis, 1));
-        farClipPoints.Add(new Vector4(-fDis * Mathf.Tan(angle / 2) * mainCamera.aspect, -fDis * Mathf.Tan(angle / 2), fDis, 1));
-
-        //转换到世界坐标系, 并获取远平面最高的点和近平面最低的点.
-        Matrix4x4 local2WorldMatrix = mainCamera.transform.localToWorldMatrix;
-        Vector4 nLowestPoint = local2WorldMatrix * nearClipPoints[0];
-        Vector4 fHighestPoint = local2WorldMatrix * farClipPoints[0];
-
-        //近平面的最低点.
-        for (int i = 0; i < nearClipPoints.Count; i++)
+        RenderTexture InitRenderTexture()
         {
-            Vector4 point = local2WorldMatrix * nearClipPoints[i];
-            if (nLowestPoint.y > point.y) nLowestPoint = point;
-        }
-        nLowestPoint = mainCamera.transform.worldToLocalMatrix * nLowestPoint;
-        nLowestPoint /= nLowestPoint.z;
-
-        //远平面的最高点.
-        for (int i = 0; i < farClipPoints.Count; i++)
-        {
-            Vector4 point = local2WorldMatrix * farClipPoints[i];
-            if (fHighestPoint.y < point.y) fHighestPoint = point;
-        }
-        fHighestPoint = mainCamera.transform.worldToLocalMatrix * fHighestPoint;
-        fHighestPoint /= fHighestPoint.z;
-
-        float lowestDistance = (maxHeight - local2WorldMatrix.m13) / (nLowestPoint.x * local2WorldMatrix.m10 + nLowestPoint.y * local2WorldMatrix.m11 + nLowestPoint.z * local2WorldMatrix.m12);
-        float highestDistance = (minHeight - local2WorldMatrix.m13) / (fHighestPoint.x * local2WorldMatrix.m10 + fHighestPoint.y * local2WorldMatrix.m11 + fHighestPoint.z * local2WorldMatrix.m12);
-
-        mainCamera.nearClipPlane = lowestDistance;
-        mainCamera.farClipPlane = highestDistance;
-    }
-
-    void DrawViewFrustum(Camera mainCamera)
-    {
-        
-        List<Vector4> crossPoints = GetCameraViewCrossPoint(mainCamera);
-        for (int i = 0; i < 4; i++)
-        {
-            Vector3 start = new Vector3(crossPoints[i].x, crossPoints[i].y, crossPoints[i].z);
-            int j = (i + 1) % 4;
-            Vector3 end = new Vector3(crossPoints[j].x, crossPoints[j].y, crossPoints[j].z);
-            Debug.DrawLine(start, end);
-        }
-        for (int i = 0; i < 4; i++)
-        {
-            Vector3 start = new Vector3(crossPoints[i + 4].x, crossPoints[i + 4].y, crossPoints[i + 4].z);
-            int j = (i + 1) % 4;
-            Vector3 end = new Vector3(crossPoints[j + 4].x, crossPoints[j + 4].y, crossPoints[j + 4].z);
-            Debug.DrawLine(start, end);
-        }
-        for (int i = 0; i < 4; i++)
-        {
-            Vector3 start = new Vector3(crossPoints[i].x, crossPoints[i].y, crossPoints[i].z);
-            int j = i + 4;
-            Vector3 end = new Vector3(crossPoints[j].x, crossPoints[j].y, crossPoints[j].z);
-            Debug.DrawLine(start, end);
-        }
-    }
-
-    void UpdateDepthCameraA(Camera mainCamera, Camera depthCamera, Light globalLight)
-    {
-        float minDistance = 0;
-        float maxDistance = 0;
-
-        List<Vector4> crossPoints = GetCameraViewCrossPoint(mainCamera);
-        for (int i = 0; i < crossPoints.Count; i++)
-        {
-
-        }
-    }
-
-    void UpdateDepthCamera(Camera mainCamera, Camera depthCamera, Light globalLight)
-    {
-        //获取mainCamera中远近平面八个顶点在方向光的坐标系下的上下左右坐标.
-        float angle = (mainCamera.fieldOfView / 180) * Mathf.PI;
-        float nDis = mainCamera.nearClipPlane;
-        float fDis = mainCamera.farClipPlane;
-        List<Vector4> mainClipPoints = new List<Vector4>();
-
-        //MainCamera 的NearClip 的四个点和FarClip的四个点
-        mainClipPoints.Add(new Vector4(nDis * Mathf.Tan(angle / 2) * mainCamera.aspect, -nDis * Mathf.Tan(angle / 2), nDis, 1));
-        mainClipPoints.Add(new Vector4(nDis * Mathf.Tan(angle / 2) * mainCamera.aspect, nDis * Mathf.Tan(angle / 2), nDis, 1));
-        mainClipPoints.Add(new Vector4(-nDis * Mathf.Tan(angle / 2) * mainCamera.aspect, nDis * Mathf.Tan(angle / 2), nDis, 1));
-        mainClipPoints.Add(new Vector4(-nDis * Mathf.Tan(angle / 2) * mainCamera.aspect, -nDis * Mathf.Tan(angle / 2), nDis, 1));
-        mainClipPoints.Add(new Vector4(fDis * Mathf.Tan(angle / 2) * mainCamera.aspect, -fDis * Mathf.Tan(angle / 2), fDis, 1));
-        mainClipPoints.Add(new Vector4(fDis * Mathf.Tan(angle / 2) * mainCamera.aspect, fDis * Mathf.Tan(angle / 2), fDis, 1));
-        mainClipPoints.Add(new Vector4(-fDis * Mathf.Tan(angle / 2) * mainCamera.aspect, fDis * Mathf.Tan(angle / 2), fDis, 1));
-        mainClipPoints.Add(new Vector4(-fDis * Mathf.Tan(angle / 2) * mainCamera.aspect, -fDis * Mathf.Tan(angle / 2), fDis, 1));
-
-        //转换到世界坐标系, 并获取远平面最高的点和近平面最低的点.
-        Matrix4x4 local2WorldMatrix = mainCamera.transform.localToWorldMatrix;
-        for (int i = 0; i < mainClipPoints.Count; i++)
-            mainClipPoints[i] = local2WorldMatrix * mainClipPoints[i];
-
-        //在灯光坐标系下计算orthographic摄像机的Near/Far Clip Plane.
-        Vector2 xSection = new Vector2(int.MinValue, int.MaxValue);
-        Vector2 ySection = new Vector2(int.MinValue, int.MaxValue);
-        Vector2 zSection = new Vector2(int.MinValue, int.MaxValue);
-        Matrix4x4 world2LightMatrix = globalLight.transform.worldToLocalMatrix;
-        for (int i = 0; i < mainClipPoints.Count; i++)
-        {
-            Vector4 point = world2LightMatrix * mainClipPoints[i];
-            mainClipPoints[i] = point;
-
-            if (point.x > xSection.x)
-                xSection.x = point.x;
-            if (point.x < xSection.y)
-                xSection.y = point.x;
-
-            if (point.y > ySection.x)
-                ySection.x = point.y;
-            if (point.y < ySection.y)
-                ySection.y = point.y;
-
-            if (point.z > zSection.x)
-                zSection.x = point.z;
-            if (point.z < zSection.y)
-                zSection.y = point.z;
-        }
-
-        depthCamera.transform.localPosition = new Vector3((xSection.x + xSection.y) / 2, (ySection.x + ySection.y) / 2, zSection.y);
-        depthCamera.nearClipPlane = 0;
-        depthCamera.farClipPlane = zSection.x - zSection.y;
-        depthCamera.orthographicSize = (ySection.x - ySection.y) / 2;
-        depthCamera.aspect = (xSection.x - xSection.y) / (ySection.x - ySection.y);
-    }
-}
-
-[CustomEditor(typeof(BaseShadowMap))]
-public class ShadowMapInspectorExtension : Editor
-{
-    static List<string> options = new List<string>();
-
-    public override void OnInspectorGUI()
-    {
-        BaseShadowMap shadowMap = (BaseShadowMap)target;
-
-        DrawDefaultInspector();
-
-        //if (shadowMap.m_CullingMask < 0)
-        {
-            options.Clear();
-            for (int i = 0; i < 32; i++)
+            RenderTexture rt = new RenderTexture(m_DepthTextureWidth, m_DepthTextureHeight, 0, RenderTextureFormat.RGFloat)
             {
-                string name = LayerMask.LayerToName(i);
-                if (!string.IsNullOrEmpty(name) && !options.Contains(name))
-                    options.Add(name);
+                useMipMap = true,
+                antiAliasing = 2
+            };
+            rt.Create();
+            return rt;
+        }
+
+        Camera InitDepthCamera(GameObject lightObj, RenderTexture rt)
+        {
+            Camera depthCamera = lightObj.GetComponentInChildren<Camera>();
+            if (!depthCamera)
+            {
+                GameObject depthCameraObj = new GameObject("DepthCamera");
+                depthCamera = depthCameraObj.AddComponent<Camera>();
+                depthCameraObj.transform.SetParent(lightObj.transform, false);
+            }
+
+            depthCamera.orthographic = true;
+            depthCamera.backgroundColor = Color.white;
+            depthCamera.clearFlags = CameraClearFlags.Color;
+            depthCamera.enabled = false;
+            depthCamera.targetTexture = rt;
+            depthCamera.nearClipPlane = 1.0f;
+            depthCamera.farClipPlane = 10.0f;
+            depthCamera.cullingMask = m_CullingMask;
+
+            return depthCamera;
+        }
+
+        /// <summary>
+        /// 初始化RenderTexture和方向光投影矩阵信息传递到Shader中.
+        /// </summary>
+        void SetShaderGlobal()
+        {
+            Matrix4x4 world2View = m_DepthCamera.worldToCameraMatrix;
+            Matrix4x4 projection = GL.GetGPUProjectionMatrix(m_DepthCamera.projectionMatrix, false);
+            m_LightVPMatrix = projection * world2View;
+
+            Vector4 mainLightPosWS = new Vector4(
+                m_DepthCamera.transform.position.x,
+                m_DepthCamera.transform.position.y,
+                m_DepthCamera.transform.position.z,
+                1);
+
+            Shader.SetGlobalVector("_MainLightPosWS", mainLightPosWS);
+            Shader.SetGlobalTexture("_ShadowDepthTex", m_DepthTexture);
+            Shader.SetGlobalMatrix("_LightViewClipMatrix", m_LightVPMatrix);
+        }
+
+        /// <summary>
+        /// 计算摄像机视锥和上下界面的交点
+        /// </summary>
+        /// <param name="mainCamera"></param>
+        /// <returns></returns>
+        List<Vector4> GetCameraViewCrossPoint(Camera mainCamera)
+        {
+            Vector4 camWorldPos = mainCamera.transform.position;
+            float angle = (mainCamera.fieldOfView / 180) * Mathf.PI;
+            float nDis = mainCamera.nearClipPlane;
+
+            // 近裁剪面
+            List<Vector4> nearClipPoints = new List<Vector4>
+            {
+                new Vector4(nDis * Mathf.Tan(angle / 2) * mainCamera.aspect, -nDis * Mathf.Tan(angle / 2), nDis, 1),
+                new Vector4(nDis * Mathf.Tan(angle / 2) * mainCamera.aspect, nDis * Mathf.Tan(angle / 2), nDis, 1),
+                new Vector4(-nDis * Mathf.Tan(angle / 2) * mainCamera.aspect, nDis * Mathf.Tan(angle / 2), nDis, 1),
+                new Vector4(-nDis * Mathf.Tan(angle / 2) * mainCamera.aspect, -nDis * Mathf.Tan(angle / 2), nDis, 1),
+                new Vector4(0, 0, nDis, 1)
+            };
+
+            // 转换到世界空间
+            Matrix4x4 local2WorldMatrix = mainCamera.transform.localToWorldMatrix;
+            for (int i = 0; i < nearClipPoints.Count; i++)
+                nearClipPoints[i] = local2WorldMatrix * nearClipPoints[i];
+
+            // 视锥的八个角
+            List<Vector4> viewFrustrumPoints = new List<Vector4>();
+            for (int i = 0; i < 4; i++)
+                viewFrustrumPoints.Add(GetLinePlaneCrossPoint(camWorldPos, nearClipPoints[i], m_MaxSceneHeight));
+            for (int i = 0; i < 4; i++)
+                viewFrustrumPoints.Add(GetLinePlaneCrossPoint(camWorldPos, nearClipPoints[i], m_MinSceneHeight));
+
+            return viewFrustrumPoints;
+        }
+        Vector4 GetLinePlaneCrossPoint(Vector4 begin, Vector4 end, float plane)
+        {
+            float t = (plane - end.y) / (end.y - begin.y);
+            float x = end.x + t * (end.x - begin.x);
+            float z = end.z + t * (end.z - begin.z);
+            return new Vector4(x, plane, z, 1);
+        }
+
+        public void DrawViewFrustum(Camera mainCamera)
+        {
+
+            List<Vector4> crossPoints = GetCameraViewCrossPoint(mainCamera);
+            for (int i = 0; i < 4; i++)
+            {
+                Vector3 start = new Vector3(crossPoints[i].x, crossPoints[i].y, crossPoints[i].z);
+                int j = (i + 1) % 4;
+                Vector3 end = new Vector3(crossPoints[j].x, crossPoints[j].y, crossPoints[j].z);
+                Debug.DrawLine(start, end);
+            }
+            for (int i = 0; i < 4; i++)
+            {
+                Vector3 start = new Vector3(crossPoints[i + 4].x, crossPoints[i + 4].y, crossPoints[i + 4].z);
+                int j = (i + 1) % 4;
+                Vector3 end = new Vector3(crossPoints[j + 4].x, crossPoints[j + 4].y, crossPoints[j + 4].z);
+                Debug.DrawLine(start, end);
+            }
+            for (int i = 0; i < 4; i++)
+            {
+                Vector3 start = new Vector3(crossPoints[i].x, crossPoints[i].y, crossPoints[i].z);
+                int j = i + 4;
+                Vector3 end = new Vector3(crossPoints[j].x, crossPoints[j].y, crossPoints[j].z);
+                Debug.DrawLine(start, end);
             }
         }
-        shadowMap.m_CullingMaskSelection = EditorGUILayout.MaskField("Culling Mask", shadowMap.m_CullingMaskSelection, options.ToArray());
 
-        if (shadowMap.m_CullingMaskSelection >= 0)
+        void UpdateDepthCamera(Camera mainCamera, Camera depthCamera, Light globalLight)
         {
-            shadowMap.m_CullingMask = 0;
-            var myBitArray = new BitArray(BitConverter.GetBytes(shadowMap.m_CullingMaskSelection));
+            List<Vector4> mainClipPoints = GetCameraViewCrossPoint(mainCamera);
 
-            for (int i = myBitArray.Count - 1; i >= 0; i--)
+            Vector2 xSection = new Vector2(int.MinValue, int.MaxValue);
+            Vector2 ySection = new Vector2(int.MinValue, int.MaxValue);
+            Vector2 zSection = new Vector2(int.MinValue, int.MaxValue);
+            Matrix4x4 world2LightMatrix = globalLight.transform.worldToLocalMatrix;
+            for (int i = 0; i < 8; i++)
             {
-                if (myBitArray[i] == true)
+                Vector4 point = world2LightMatrix * mainClipPoints[i];
+                mainClipPoints[i] = point;
+
+                if (point.x > xSection.x)
+                    xSection.x = point.x;
+                if (point.x < xSection.y)
+                    xSection.y = point.x;
+
+                if (point.y > ySection.x)
+                    ySection.x = point.y;
+                if (point.y < ySection.y)
+                    ySection.y = point.y;
+
+                if (point.z > zSection.x)
+                    zSection.x = point.z;
+                if (point.z < zSection.y)
+                    zSection.y = point.z;
+            }
+
+            depthCamera.transform.localPosition = new Vector3((xSection.x + xSection.y) / 2, (ySection.x + ySection.y) / 2, zSection.y);
+            depthCamera.nearClipPlane = 0;
+            depthCamera.farClipPlane = zSection.x - zSection.y;
+            depthCamera.orthographicSize = (ySection.x - ySection.y) / 2;
+            depthCamera.aspect = (xSection.x - xSection.y) / (ySection.x - ySection.y);
+        }
+
+        void BlurDepthRT(RenderTexture renderTexture)
+        {
+            if (m_BlurShader != null)
+            {
+                float widthMod = 1.0f / (1.0f * (1 << DownSampleNum));
+                m_BlurMaterial.SetFloat("_DownSampleValue", BlurSpreadSize * widthMod);
+                int renderWidth = renderTexture.width >> DownSampleNum;
+                int renderHeight = renderTexture.height >> DownSampleNum;
+
+                RenderTexture renderBuffer = RenderTexture.GetTemporary(renderWidth, renderHeight, 0, renderTexture.format);
+                renderBuffer.filterMode = FilterMode.Bilinear;
+                Graphics.Blit(renderTexture, renderBuffer, m_BlurMaterial, 0);
+
+                for (int i = 0; i < BlurIterations; i++)
                 {
-                    if (shadowMap.m_CullingMask > 0)
-                        shadowMap.m_CullingMask |= 1 << LayerMask.NameToLayer(options[i]);
-                    else
-                        shadowMap.m_CullingMask = 1 << LayerMask.NameToLayer(options[i]);
+                    float iterationOffs = (i * 1.0f);
+                    m_BlurMaterial.SetFloat("_DownSampleValue", BlurSpreadSize * widthMod + iterationOffs);
+
+                    RenderTexture tempBuffer = RenderTexture.GetTemporary(renderWidth, renderHeight, 0, renderTexture.format);
+                    Graphics.Blit(renderBuffer, tempBuffer, m_BlurMaterial, 1);
+                    RenderTexture.ReleaseTemporary(renderBuffer);
+                    renderBuffer = tempBuffer;
+
+                    tempBuffer = RenderTexture.GetTemporary(renderWidth, renderHeight, 0, renderTexture.format);
+                    Graphics.Blit(renderBuffer, tempBuffer, m_BlurMaterial, 2);
+                    RenderTexture.ReleaseTemporary(renderBuffer);
+                    renderBuffer = tempBuffer;
                 }
 
+                Graphics.Blit(renderBuffer, renderTexture);
+                RenderTexture.ReleaseTemporary(renderBuffer);
             }
         }
-        else
-            shadowMap.m_CullingMask = shadowMap.m_CullingMaskSelection;
+    }
 
-        //Debug.Log("shadowMap.m_CullingMaskSelection :" + shadowMap.m_CullingMaskSelection);
+    [CustomEditor(typeof(BaseShadowMap))]
+    public class ShadowMapInspectorExtension : Editor
+    {
+        static List<string> options = new List<string>();
+
+        public override void OnInspectorGUI()
+        {
+            BaseShadowMap shadowMap = (BaseShadowMap)target;
+
+            DrawDefaultInspector();
+
+            //if (shadowMap.m_CullingMask < 0)
+            {
+                options.Clear();
+                for (int i = 0; i < 32; i++)
+                {
+                    string name = LayerMask.LayerToName(i);
+                    if (!string.IsNullOrEmpty(name) && !options.Contains(name))
+                        options.Add(name);
+                }
+            }
+            shadowMap.m_CullingMaskSelection = EditorGUILayout.MaskField("Culling Mask", shadowMap.m_CullingMaskSelection, options.ToArray());
+
+            if (shadowMap.m_CullingMaskSelection >= 0)
+            {
+                shadowMap.m_CullingMask = 0;
+                var myBitArray = new BitArray(BitConverter.GetBytes(shadowMap.m_CullingMaskSelection));
+
+                for (int i = myBitArray.Count - 1; i >= 0; i--)
+                {
+                    if (myBitArray[i] == true)
+                    {
+                        if (shadowMap.m_CullingMask > 0)
+                            shadowMap.m_CullingMask |= 1 << LayerMask.NameToLayer(options[i]);
+                        else
+                            shadowMap.m_CullingMask = 1 << LayerMask.NameToLayer(options[i]);
+                    }
+
+                }
+            }
+            else
+                shadowMap.m_CullingMask = shadowMap.m_CullingMaskSelection;
+
+            //Debug.Log("shadowMap.m_CullingMaskSelection :" + shadowMap.m_CullingMaskSelection);
+        }
     }
 }

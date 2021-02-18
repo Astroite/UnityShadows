@@ -1,6 +1,4 @@
-﻿// Upgrade NOTE: replaced '_Object2World' with 'unity_ObjectToWorld'
-
-Shader "Astroite/Shadows/BaseShadowMapReveiver"
+﻿Shader "Astroite/Shadows/BaseShadowMapReveiver"
 {
 	Properties
 	{
@@ -38,6 +36,8 @@ Shader "Astroite/Shadows/BaseShadowMapReveiver"
 			sampler2D _ShadowDepthTex;
 			sampler2D _MainTex;
 			matrix _LightViewClipMatrix;
+			uniform float4 _MainLightPosWS;
+
 			float4 _MainTex_ST;
 			float4 _Color;
 
@@ -59,19 +59,34 @@ Shader "Astroite/Shadows/BaseShadowMapReveiver"
 
 				return o;
 			}
+
+			float VSM_FLITER(float2 moments, float fragDepth)
+			{
+				if (fragDepth <= moments.x)
+					return 1.0;
+
+				float variance = moments.y - moments.x * moments.x;
+				variance = max(variance, 0.00002);
+
+				float mD = moments.x - fragDepth;
+				float p = variance / (variance + mD * mD);
+
+				return p;
+			}
 			
 			fixed4 frag (v2f i) : SV_Target
 			{
-				//Comppute in light space.
+				//Compute depth
+				float fragDepth = distance(_MainLightPosWS.xyz, i.vertex.xyz);
+				// Sample DepthTexture
 				float4 posInLight = ComputeScreenPosInLight(mul(_LightViewClipMatrix, float4(i.worldPos, 1)));
-				float depth = tex2D(_ShadowDepthTex, posInLight.xy/ posInLight.w).r;
+				float2 moments = tex2D(_ShadowDepthTex, posInLight.xy/ posInLight.w).rg;
+
+				float shadow = VSM_FLITER(moments, fragDepth);
+				return shadow.xxxx;
+				
 				fixed4 col = tex2D(_MainTex, i.uv) * _Color;
-
-				//Discard border.
-				float white = posInLight.x < 0.0 ? 1.0 : (posInLight.x > 1.0 ? 1.0 : (posInLight.y < 0.0 ? 1.0 : (posInLight.y > 1.0 ? 1.0 : 0.0)));
-				if (white > 0.5) depth = 1.f;
-
-				return col * depth;
+				return col;
 			}
 			ENDCG
 		}
