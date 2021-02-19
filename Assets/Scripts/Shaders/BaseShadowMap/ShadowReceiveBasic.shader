@@ -9,6 +9,8 @@
 	{
 		Tags { "RenderType"="Opaque" }
 		LOD 100
+		Blend SrcAlpha OneMinusSrcAlpha
+		Cull back
 
 		Pass
 		{
@@ -16,9 +18,9 @@
 			#pragma vertex vert
 			#pragma fragment frag
 			#pragma multi_compile_fog
+			 #pragma enable_d3d11_debug_symbols
 
-			#include "UnityCG.cginc"	
-			#include "../includes/ShadowCG.cginc"
+			#include "UnityCG.cginc"
 
 			struct appdata
 			{
@@ -36,7 +38,7 @@
 			sampler2D _ShadowDepthTex;
 			sampler2D _MainTex;
 			matrix _LightViewClipMatrix;
-			uniform float4 _MainLightPosWS;
+			float4 _MainLightPosWS;
 
 			float4 _MainTex_ST;
 			float4 _Color;
@@ -46,7 +48,6 @@
 				float4 o = pos * 0.5f;
 				o.xy = o.xy + o.w;
 				o.zw = pos.zw;
-
 				return o;
 			}
 			
@@ -60,32 +61,46 @@
 				return o;
 			}
 
+			float linstep(float minValue, float maxValue, float v)
+			{
+				return clamp((v - minValue)/(maxValue - minValue), 0, 1);
+			}
+
+			float ReduceLightBleeding(float p_max, float Amount)
+			{  
+				return linstep(Amount, 1, p_max);
+			}
+
 			float VSM_FLITER(float2 moments, float fragDepth)
 			{
-				if (fragDepth <= moments.x)
-					return 1.0;
+				float E_x2 = moments.y;
+				float Ex_2 = moments.x * moments.x;
 
-				float variance = moments.y - moments.x * moments.x;
-				variance = max(variance, 0.00002);
+				float variance = E_x2 - Ex_2;
+				variance = max(variance, 0.002);
 
 				float mD = moments.x - fragDepth;
-				float p = variance / (variance + mD * mD);
+				float mD_2 = mD * mD;
+				float p = variance / (variance + mD_2);
 
-				return p;
+				//p = ReduceLightBleeding(p, 0.3);
+
+				float lit = max( p, fragDepth <= moments.x );
+				lit = lerp(0.3, 1, lit);
+
+				return lit;
 			}
 			
 			fixed4 frag (v2f i) : SV_Target
 			{
-				//Compute depth
-				float fragDepth = distance(_MainLightPosWS.xyz, i.vertex.xyz);
-				// Sample DepthTexture
 				float4 posInLight = ComputeScreenPosInLight(mul(_LightViewClipMatrix, float4(i.worldPos, 1)));
-				float2 moments = tex2D(_ShadowDepthTex, posInLight.xy/ posInLight.w).rg;
+				float2 moments = tex2Dproj(_ShadowDepthTex, posInLight).rg;
+				float depth = distance(_MainLightPosWS.xyz, i.worldPos);
 
-				float shadow = VSM_FLITER(moments, fragDepth);
-				return shadow.xxxx;
+				float shadow = VSM_FLITER(moments, depth);
 				
 				fixed4 col = tex2D(_MainTex, i.uv) * _Color;
+				col.rgb *= shadow;
 				return col;
 			}
 			ENDCG

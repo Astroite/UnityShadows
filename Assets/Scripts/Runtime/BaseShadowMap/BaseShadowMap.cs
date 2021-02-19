@@ -76,15 +76,15 @@ namespace Astroite.Shadow
             SetShaderGlobal();
 
             m_DepthCamera.RenderWithShader(m_CaptureDepthShader, "RenderType");
-            // BlurDepthRT(m_DepthTexture);
+            BlurDepthRT(m_DepthTexture);
         }
 
         RenderTexture InitRenderTexture()
         {
+            // return AssetDatabase.LoadAssetAtPath<RenderTexture>("Assets/ArtSources/RenderTexture/ShadowMap.renderTexture");
             RenderTexture rt = new RenderTexture(m_DepthTextureWidth, m_DepthTextureHeight, 0, RenderTextureFormat.RGFloat)
             {
-                useMipMap = true,
-                antiAliasing = 2
+                useMipMap = true
             };
             rt.Create();
             return rt;
@@ -101,7 +101,7 @@ namespace Astroite.Shadow
             }
 
             depthCamera.orthographic = true;
-            depthCamera.backgroundColor = Color.white;
+            depthCamera.backgroundColor = Color.black;
             depthCamera.clearFlags = CameraClearFlags.Color;
             depthCamera.enabled = false;
             depthCamera.targetTexture = rt;
