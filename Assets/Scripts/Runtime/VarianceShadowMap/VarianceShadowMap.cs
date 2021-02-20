@@ -26,14 +26,15 @@ namespace Astroite.Shadow
         private int m_DepthTextureHeight = 1024;
         private RenderTexture m_DepthTexture = null;
         private Camera m_DepthCamera = null;
+
         //View&Projection's matrix in light space.
         private Matrix4x4 m_LightVPMatrix;
         private Light m_DirectionalLight = null;
 
-        public Shader m_CaptureDepthShader = null;
         public float m_MaxSceneHeight = 10;       
-        public float m_MinSceneHeight = 0;             
-
+        public float m_MinSceneHeight = 0;
+        
+        private Shader m_CaptureDepthShader = null;
         private Material m_BlurMaterial = null;
         public Shader m_BlurShader = null;
         [Range(0, 6)]
@@ -54,8 +55,9 @@ namespace Astroite.Shadow
             m_DepthTexture = InitRenderTexture();
 
             m_DepthCamera = InitDepthCamera(gameObject, m_DepthTexture);
+            m_CaptureDepthShader = Shader.Find("Astroite/VSM/GenerateDepth");
 
-            m_BlurShader = Shader.Find("Learning Unity Shader/Lecture 15/RapidBlurEffect");
+            m_BlurShader = Shader.Find("Astroite/Common/GaussianBlur");
             m_BlurMaterial = new Material(m_BlurShader);
         }
 

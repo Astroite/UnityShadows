@@ -1,10 +1,7 @@
-﻿// Upgrade NOTE: replaced 'mul(UNITY_MATRIX_MVP,*)' with 'UnityObjectToClipPos(*)'
-
-Shader "Learning Unity Shader/Lecture 15/RapidBlurEffect"
+﻿Shader "Astroite/Common/GaussianBlur"
 { 
 	Properties
 	{
-		//主纹理
 		_MainTex("Base (RGB)", 2D) = "white" {}
 	}
  

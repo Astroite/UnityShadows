@@ -1,4 +1,4 @@
-﻿Shader "ShadowMap/CaptureDepth"
+﻿Shader "Astroite/VSM/GenerateDepth"
 {
 	Properties
 	{
@@ -8,7 +8,7 @@
 	SubShader
 	{
 		Tags { "RenderType"="Opaque" }
-		LOD 200
+		LOD 100
 
 		Pass
 		{

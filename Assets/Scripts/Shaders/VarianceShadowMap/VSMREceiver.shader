@@ -1,4 +1,4 @@
-﻿Shader "Astroite/Shadows/BaseShadowMapReveiver"
+﻿Shader "Astroite/VSM/Reveiver"
 {
 	Properties
 	{
@@ -18,7 +18,7 @@
 			#pragma vertex vert
 			#pragma fragment frag
 			#pragma multi_compile_fog
-			 #pragma enable_d3d11_debug_symbols
+			#pragma enable_d3d11_debug_symbols
 
 			#include "UnityCG.cginc"
 

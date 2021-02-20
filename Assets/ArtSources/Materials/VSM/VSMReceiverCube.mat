@@ -7,7 +7,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: BaseShadowMapReceiver
+  m_Name: VSMReceiverCube
   m_Shader: {fileID: 4800000, guid: 94910e084e9f914409a874b5fec39168, type: 3}
   m_ShaderKeywords: 
   m_LightmapFlags: 4
@@ -73,5 +73,5 @@ Material:
     - _UVSec: 0
     - _ZWrite: 1
     m_Colors:
-    - _Color: {r: 0.6981132, g: 0.5960306, b: 0.5960306, a: 1}
+    - _Color: {r: 0.8490566, g: 0.83722776, b: 0.7168921, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
