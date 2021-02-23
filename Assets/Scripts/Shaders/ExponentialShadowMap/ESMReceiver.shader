@@ -9,7 +9,7 @@
 	{
 		Tags { "RenderType"="Opaque" }
 		LOD 100
-		Blend SrcAlpha OneMinusSrcAlpha
+		// Blend SrcAlpha OneMinusSrcAlpha
 		Cull back
 
 		Pass
@@ -62,26 +62,31 @@
 				return o;
 			}
 
-			float ESM_FLITER(float3 worldPos)
+			float ESM_FLITER(float moment, float depth)
 			{
-                float4 posInLight = ComputeScreenPosInLight(mul(_LightViewClipMatrix, float4(worldPos, 1)));
-				float emoment = tex2Dproj(_ShadowDepthTex, posInLight).r;
+				float lit = 0;
+				moment += 0.001;
+				lit = depth * moment;
 
-				float depth = distance(_MainLightPosWS.xyz, worldPos);
-                float edepth = exp(depth * -_ESMScaleFactor);
+				return saturate(lit);
 
-                float shadow = edepth * emoment;
-                shadow = saturate(shadow);
-                shadow = lerp(0.3, 1, shadow);
+                // float shadow = edepth * emoment;
+                // shadow = saturate(shadow);
+                // shadow = lerp(0.3, 1, shadow);
 
-                return shadow;
+                // return shadow;
 			}
 			
 			fixed4 frag (v2f i) : SV_Target
 			{
                 fixed4 col = tex2D(_MainTex, i.uv) * _Color;
 
-				float shadow = ESM_FLITER(i.worldPos);
+				float4 posInLight = ComputeScreenPosInLight(mul(_LightViewClipMatrix, float4(i.worldPos, 1)));
+				float moment = tex2Dproj(_ShadowDepthTex, posInLight).r;
+				float depth = distance(_MainLightPosWS.xyz, i.worldPos);
+				float edepth = exp(depth * -_ESMScaleFactor);
+
+				float shadow = ESM_FLITER(moment, edepth);
 				col.rgb *= shadow;
 
 				return col;
