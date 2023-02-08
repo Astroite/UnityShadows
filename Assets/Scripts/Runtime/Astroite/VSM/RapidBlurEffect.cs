@@ -63,13 +63,6 @@ public class RapidBlurEffect : MonoBehaviour
 
         //找到当前的Shader文件
         CurShader = Shader.Find(ShaderName);
-
-        //判断当前设备是否支持屏幕特效
-        if (!SystemInfo.supportsImageEffects)
-        {
-            enabled = false;
-            return;
-        }
     }
 
     //-------------------------------------【OnRenderImage()函数】------------------------------------  

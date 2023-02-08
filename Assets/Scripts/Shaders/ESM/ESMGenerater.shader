@@ -58,7 +58,8 @@
 			
 			float4 frag (v2f i) : SV_Target
 			{				
-				float depth = distance(_MainLightPosWS.xyz, i.worldPos);
+				// float depth = distance(_MainLightPosWS.xyz, i.worldPos);
+				float depth = 1 - i.vertex.z;
                 float emoment = exp(depth * _ESMScaleFactor);
 
 				return float4(emoment, 0, 0, 1);

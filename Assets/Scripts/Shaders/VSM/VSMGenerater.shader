@@ -44,7 +44,8 @@
 			
 			float4 frag (v2f i) : SV_Target
 			{
-				float depth = distance(_MainLightPosWS.xyz, i.worldPos);
+				//float depth = distance(_MainLightPosWS.xyz, i.worldPos);
+				float depth = i.vertex.z;
 				
 				float moment1 = depth;
 				float moment2 = depth * depth;

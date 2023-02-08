@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System;
 using UnityEngine;
 using UnityEditor;
+using UnityEngine.Serialization;
 
 namespace Astroite.Shadow
 {
@@ -10,8 +11,6 @@ namespace Astroite.Shadow
     [RequireComponent(typeof(Light))]
     public class ExponentialShadowMap : MonoBehaviour
     {
-        private int m_DepthTextureWidth = 1024;
-        private int m_DepthTextureHeight = 1024;
         private RenderTexture m_DepthTexture = null;
         private Camera m_DepthCamera = null;
 
@@ -23,7 +22,7 @@ namespace Astroite.Shadow
         public float m_MinSceneHeight = 0;
         public int ESMScaleFactor = 1;
         
-        private Shader m_ESMGeneratorShader = null;
+        [FormerlySerializedAs("m_ESMGeneratorShader")] public Shader m_DepthShader = null;
         private Material m_BlurMaterial = null;
         private Shader m_GaussianBlurShader = null;
         [Range(0, 6)]
@@ -44,7 +43,7 @@ namespace Astroite.Shadow
             m_DepthTexture = InitRenderTexture();
             m_DepthCamera = InitDepthCamera(gameObject, m_DepthTexture);
 
-            m_ESMGeneratorShader = Shader.Find("Astroite/ESM/ESMGenerator");
+            m_DepthShader = Shader.Find("Astroite/ESM/ESMGenerator");
             m_GaussianBlurShader = Shader.Find("Astroite/Common/GaussianBlur");
             m_BlurMaterial = new Material(m_GaussianBlurShader);
         }
@@ -55,7 +54,7 @@ namespace Astroite.Shadow
             GL.Clear(true, true, Color.white);
 
             if (null == m_DepthCamera) return;
-            if (null == m_ESMGeneratorShader) return;
+            if (null == m_DepthShader) return;
 
             GetCameraViewCrossPoint(Camera.main);
 
@@ -64,20 +63,13 @@ namespace Astroite.Shadow
 
             SetShaderGlobal();
 
-            m_DepthCamera.RenderWithShader(m_ESMGeneratorShader, "RenderType");
+            m_DepthCamera.RenderWithShader(m_DepthShader, "RenderType");
             BlurDepthRT(m_DepthTexture);
         }
 
         RenderTexture InitRenderTexture()
         {
             return AssetDatabase.LoadAssetAtPath<RenderTexture>("Assets/ArtSources/RenderTexture/ShadowMap.renderTexture");
-            RenderTexture rt = new RenderTexture(m_DepthTextureWidth, m_DepthTextureHeight, 0, RenderTextureFormat.RFloat)
-            {
-                antiAliasing = 4,
-                useMipMap = true
-            };
-            rt.Create();
-            return rt;
         }
 
         Camera InitDepthCamera(GameObject lightObj, RenderTexture rt)
