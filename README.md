@@ -1,2 +1,2 @@
 # UnityShadows
-A long term plan to implement all kinds of shadows whit unity.
+Planning to implement some interesting shadow algorithms whit unity.
