@@ -39,10 +39,10 @@ Shader "Astroite/EVSM/EVSMGenerator"
 			
 			float4 frag (v2f i) : SV_Target
 			{				
-				float depth = i.vertex.z / i.vertex.w;
+				float depth = 1 - i.vertex.z / i.vertex.w;
 				float2 exponents = EVSM_GetExponents(_PositiveExponent, _NegativeExponent);
 				float2 vsmDepth = EVSM_ApplyDepthWarp(depth, exponents);
-				
+				// return float4(depth.xxxx);
 				return float4(vsmDepth.xy, vsmDepth.xy * vsmDepth.xy);
 			}
 			ENDCG

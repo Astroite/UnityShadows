@@ -21,9 +21,10 @@ namespace Astroite.Shadow
         private Light m_DirectionalLight = null;
 
         // Shadow Setting
-        public float m_MaxSceneHeight = 10;       
-        public float m_MinSceneHeight = 0;
-        
+        [Range(0.001f, 1.0f)]
+        public float EVSMBias = 0.02f;
+        [Range(0.01f, 1.0f)]
+        public float EVSMLightBleedingReduction = 0.01f;
         public float PositiveExponent = 5.0f;
         public float NegativeExponent = 2.0f;
         
@@ -111,6 +112,9 @@ namespace Astroite.Shadow
             
             Shader.SetGlobalMatrix("_LightViewClipMatrix", m_LightVPMatrix);
             Shader.SetGlobalTexture("_ShadowDepthTex", m_DepthTexture);
+            
+            Shader.SetGlobalFloat("_EVSMBias", EVSMBias);
+            Shader.SetGlobalFloat("_EVSMLightBleedingReduction", EVSMLightBleedingReduction);
             Shader.SetGlobalFloat("_PositiveExponent", PositiveExponent);
             Shader.SetGlobalFloat("_NegativeExponent", NegativeExponent);
         }

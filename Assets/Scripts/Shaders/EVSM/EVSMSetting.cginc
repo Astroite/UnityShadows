@@ -20,6 +20,7 @@ float2 EVSM_GetExponents(float positiveExponent, float negativeExponent)
 {
     const float maxExponent = 5.54f; // 16 Bit
     float2 exponents = float2(positiveExponent, negativeExponent);
+    return exponents;
     return min(exponents, maxExponent);
 }
 
@@ -59,14 +60,14 @@ float EVSM_FLITER(float3 worldPos)
     float4 posLS = mul(_LightViewClipMatrix, float4(worldPos, 1));
     float4 ndcPosLS = posLS / posLS.w;
     float4 screenPosLS = ComputeScreenPosInLight(ndcPosLS);
-    float depth = posLS.z;
+    float depth = 1 - posLS.z;
     
     float2 exponents = EVSM_GetExponents(_PositiveExponent, _NegativeExponent);
     float2 warpedDepth = EVSM_ApplyDepthWarp(depth, exponents);
 
     float4 occluders = tex2D(_ShadowDepthTex, screenPosLS.xy);
 
-    float2 depthScale = _EVSMBias * 0.01f * exponents * warpedDepth;
+    float2 depthScale = _EVSMBias * 0.1f * exponents * warpedDepth;
     float2 minVariance = depthScale * depthScale;
 
     float posContrib = EVSM_ChebyshevUpperBound(occluders.xz, warpedDepth.x, minVariance.x, _EVSMLightBleedingReduction);

@@ -7,9 +7,8 @@ Shader "Astroite/EVSM/EVSMReceiver"
 	}
 	SubShader
 	{
-		// Tags { "RenderType"="Opaque" }
+		Tags { "RenderType"="Opaque" }
 		LOD 100
-		// Blend SrcAlpha OneMinusSrcAlpha
 		Cull back
 
 		Pass
@@ -55,7 +54,7 @@ Shader "Astroite/EVSM/EVSMReceiver"
                 fixed4 col = tex2D(_MainTex, i.uv) * _Color;
 				
 				float visibility = EVSM_FLITER(i.worldPos);
-				float shadow = 1 - visibility;
+				float shadow = visibility;
 				shadow = shadow * 0.7 + 0.3;
 				// return float4(visibility, 0, 0, 0);
 				return col * shadow;
